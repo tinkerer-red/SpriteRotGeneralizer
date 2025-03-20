@@ -14,8 +14,8 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 # Rotation Angles (0° to 360° in 15° increments)
 ROTATION_ANGLES = list(range(0, 361, 15))
 
-# Padding between images in sprite strip
-PADDING = -14
+# PADDING between images in sprite strip
+PADDING = 2
 
 
 
@@ -238,47 +238,67 @@ def generate_example_texture_sheet(image, rotations, original_name):
 
     cell_width = max_width
     cell_height = max_height
-    text_width = cell_width * 2  # Text takes 2x width
-    padding = 10
+    
+    # **Load default font (or replace with a TTF font for custom styling)**
+    try:
+        font = ImageFont.truetype("arial.ttf", 10)  # Reduced text size
+    except IOError:
+        font = ImageFont.load_default()
+
+    # **Determine the necessary text width dynamically**
+    draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))  # Dummy image to measure text
+    text_width = cell_width * 2  # Default to 2x width
+    text_height = cell_height
+
+    for method_name in ROTATION_METHODS.keys():
+        text_size = draw.textbbox((0, 0), method_name, font=font)
+        text_actual_width = text_size[2] - text_size[0] + 20  # Add some PADDING
+        if text_actual_width > text_width:
+            text_width = math.ceil(text_actual_width / cell_width) * cell_width  # Expand by full cells
 
     # **Compute final sheet dimensions**
-    sheet_width = text_width + (cell_width + padding) * num_rotations
-    sheet_height = (cell_height + padding) * num_methods
+    sheet_width = text_width + (cell_width + PADDING) * num_rotations
+    sheet_height = (cell_height + PADDING) * num_methods
 
     # **Create a blank image with transparent background**
     sheet = Image.new("RGBA", (sheet_width, sheet_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(sheet)
 
-    # **Load default font (or replace with a TTF font for custom styling)**
-    try:
-        font = ImageFont.truetype("arial.ttf", 10)  # ✅ Reduced text size by half
-    except IOError:
-        font = ImageFont.load_default()
-
     # **Iterate over all methods**
     for row, (method_name, rotation_func) in enumerate(ROTATION_METHODS.items()):
-        y_offset = row * (cell_height + padding)
+        y_offset = math.floor(row * (cell_height + PADDING))
 
         # **Draw white rectangle for text background**
-        draw.rectangle([(0, y_offset), (text_width, y_offset + cell_height)], fill=(255, 255, 255, 255))
+        draw.rectangle(
+            [math.floor(0), math.floor(y_offset), 
+             math.floor(text_width), math.floor(y_offset + cell_height)], 
+            fill=(255, 255, 255, 255)
+        )
 
-        # **Draw the method name in the first column**
-        text_position = (10, y_offset + (cell_height // 2) - 5)
-        draw.text(text_position, method_name, fill=(0, 0, 0, 255), font=font)
+        # **Draw the method name centered inside its expanded box**
+        text_size = draw.textbbox((0, 0), method_name, font=font)
+        text_w = text_size[2] - text_size[0]
+        text_h = text_size[3] - text_size[1]
+
+        text_x = math.floor((text_width - text_w) // 2)
+        text_y = math.floor(y_offset + (cell_height - text_h) // 2)
+
+        draw.text((text_x, text_y), method_name, fill=(0, 0, 0, 255), font=font)
 
         # **Generate rotated images**
         for col, angle in enumerate(rotations):
             rotated_img = rotation_func(image, angle)
-            x_offset = text_width + col * (cell_width + padding)
+            x_offset = math.floor(text_width + col * (cell_width + PADDING))
 
             # Compute centering offsets
-            x_center = (cell_width - rotated_img.width) // 2
-            y_center = (cell_height - rotated_img.height) // 2
+            x_center = math.floor((cell_width - rotated_img.width) // 2)
+            y_center = math.floor((cell_height - rotated_img.height) // 2)
 
             # Paste rotated image (keeps transparency)
             sheet.paste(rotated_img, (x_offset + x_center, y_offset + y_center), rotated_img)
 
     return sheet
+    
 
 def process_images():
     """Processes images from the input folder and generates a unified texture sheet."""
